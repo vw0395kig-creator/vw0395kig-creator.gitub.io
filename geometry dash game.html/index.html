@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>GD Custom Icons</title>
+<style>
+    body { margin:0; overflow:hidden; background:#000; }
+    canvas { display:block; }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<audio id="music" src="Miss Monique @ Grand Canyon (Arizona, USA) [Melodic Techno_ Progressive House DJ Mix].mp3"></audio>
+
+<script>
+// ---------------------------------------------------------
+// BASE SETUP
+// ---------------------------------------------------------
+window.focus();
+window.addEventListener("click",()=>window.focus());
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let state = "menu";     
+let level = 1;
+let mode = "cube";      
+let score = 0;
+
+let groundHeight = 180;
+let speed = 12;
+
+// ---------------------------------------------------------
+// LOAD ALL ICON IMAGES
+// ---------------------------------------------------------
+function loadImg(src){
+    let img = new Image();
+    img.src = src;
+    return img;
+}
+
+// Your cube icon
+const iconCube = loadImg("cube.png");
+
+// 9 icons you sent
+const iconShip   = loadImg("icon_0_1.png");  // submarine
+const iconUfo    = loadImg("icon_0_2.png");  // balloon
+const iconBall   = loadImg("icon_1_1.png");  // bullet
+const iconSpider = loadImg("icon_1_2.png");  // pig
+const iconRobot  = loadImg("icon_2_1.png");  // rocket
+const iconWave   = loadImg("icon_2_2.png");  // snake
+
+// Assign
+const icons = {
+    cube:   iconCube,
+    ship:   iconShip,
+    ball:   iconBall,
+    ufo:    iconUfo,
+    wave:   iconWave,
+    robot:  iconRobot,
+    spider: iconSpider
+};
+
+// ---------------------------------------------------------
+// PLAYER
+// ---------------------------------------------------------
+let player = {
+    x:150,
+    y:canvas.height - 300,
+    size:80,
+    yVel:0,
+    gravity:0.8
+};
+
+let obstacles = [];
+let portals = [];
+let music = document.getElementById("music");
+
+// ---------------------------------------------------------
+// LEVEL SETTINGS
+// ---------------------------------------------------------
+const LEVELS = {
+    1:{ name:"Level 1", spikeRate:1200, portalRate:7000 },
+    2:{ name:"Level 2", spikeRate:900,  portalRate:5000 },
+    3:{ name:"Level 3", spikeRate:700,  portalRate:3500 }
+};
+
+let spikeTimer = null;
+let portalTimer = null;
+
+// ---------------------------------------------------------
+// SPAWN SYSTEM
+// ---------------------------------------------------------
+function spawnSpike(){
+    if(state !== "game") return;
+    obstacles.push({
+        type: "spike",
+        x: canvas.width + 50,
+        y: canvas.height - groundHeight - 80,
+        size: 80
+    });
+}
+
+function spawnPortal(){
+    if(state !== "game") return;
+
+    let types = ["cube","ship","ball","ufo","wave","robot","spider"];
+    let r = types[Math.floor(Math.random()*types.length)];
+
+    portals.push({
+        type:r,
+        x:canvas.width + 250,
+        y:canvas.height - groundHeight - 150,
+        w:90,
+        h:140
+    });
+}
+
+// ---------------------------------------------------------
+// DRAWING
+// ---------------------------------------------------------
+function drawPlayer(){
+    ctx.drawImage(icons[mode], player.x, player.y, player.size, player.size);
+}
+
+function drawObstacles(){
+    ctx.fillStyle="red";
+    for(let s of obstacles){
+        s.x -= speed;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y + s.size);
+        ctx.lineTo(s.x + s.size/2, s.y);
+        ctx.lineTo(s.x + s.size, s.y + s.size);
+        ctx.fill();
+    }
+}
+
+function drawPortals(){
+    for(let p of portals){
+        p.x -= speed;
+
+        ctx.strokeStyle="#0ff";
+        ctx.lineWidth=6;
+        ctx.strokeRect(p.x, p.y, p.w, p.h);
+
+        if(
+            player.x < p.x + p.w &&
+            player.x + player.size > p.x &&
+            player.y < p.y + p.h &&
+            player.y + player.size > p.y
+        ){
+            mode = p.type;
+            player.yVel = 0;
+            portals = portals.filter(x=>x!==p);
+        }
+    }
+}
+
+function drawMenu(){
+    ctx.fillStyle="#0ff";
+    ctx.font="80px Arial";
+    ctx.fillText("GEOMETRY DASH CUSTOM", canvas.width/2 - 430, canvas.height/2 - 150);
+
+    ctx.fillStyle="#fff";
+    ctx.font="50px Arial";
+    ctx.fillText("Press SPACE to Start", canvas.width/2 - 250, canvas.height/2 - 30);
+}
+
+function drawLevelSelect(){
+    ctx.fillStyle="#0ff";
+    ctx.font="70px Arial";
+    ctx.fillText("SELECT LEVEL", canvas.width/2 - 210, 180);
+
+    ctx.font="50px Arial";
+    ctx.fillStyle="yellow"; ctx.fillText("1. Level 1", canvas.width/2 - 120, 340);
+    ctx.fillStyle="orange"; ctx.fillText("2. Level 2", canvas.width/2 - 120, 430);
+    ctx.fillStyle="red";    ctx.fillText("3. Level 3", canvas.width/2 - 120, 520);
+}
+
+function drawDeath(){
+    ctx.fillStyle="white";
+    ctx.font="100px Arial";
+    ctx.fillText("GAME OVER", canvas.width/2 - 260, canvas.height/2 - 40);
+
+    ctx.font="40px Arial";
+    ctx.fillText("Press R to Restart", canvas.width/2 - 155, canvas.height/2 + 60);
+}
+
+function drawScore(){
+    ctx.fillStyle="white";
+    ctx.font="30px Arial";
+    ctx.fillText("Score: " + score, 30, 50);
+    score++;
+}
+
+// ---------------------------------------------------------
+// PHYSICS
+// ---------------------------------------------------------
+function physics(){
+    if(mode==="cube" || mode==="robot"){
+        player.yVel += player.gravity;
+        player.y += player.yVel;
+
+        if(player.y + player.size >= canvas.height - groundHeight){
+            player.y = canvas.height - groundHeight - player.size;
+            player.yVel = 0;
+        }
+    }
+
+    if(mode==="ship")  player.y += player.yVel += 0.25;
+    if(mode==="ball")  player.y += player.yVel += 0.7;
+    if(mode==="ufo")   player.y += player.yVel += 0.45;
+    if(mode==="wave")  player.y += player.yVel;
+    if(mode==="spider") player.y += player.yVel;
+
+    // Spike collision
+    for(let s of obstacles){
+        if(
+            player.x < s.x + s.size &&
+            player.x + player.size > s.x &&
+            player.y < s.y + s.size &&
+            player.y + player.size > s.y
+        ){
+            state="dead";
+            music.pause();
+        }
+    }
+}
+
+// ---------------------------------------------------------
+// GAME LOOP
+// ---------------------------------------------------------
+function update(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Draw ground
+    ctx.fillStyle="#222";
+    ctx.fillRect(0, canvas.height-groundHeight, canvas.width, groundHeight);
+
+    if(state==="menu") drawMenu();
+    if(state==="levelSelect") drawLevelSelect();
+
+    if(state==="game"){
+        drawPlayer();
+        drawObstacles();
+        drawPortals();
+        physics();
+        drawScore();
+    }
+
+    if(state==="dead"){
+        drawPlayer();
+        drawObstacles();
+        drawDeath();
+    }
+
+    requestAnimationFrame(update);
+}
+update();
+
+// ---------------------------------------------------------
+// START GAME (FULL FIX APPLIED)
+// ---------------------------------------------------------
+function startGame(){
+
+    const L = LEVELS[level];
+
+    state = "game";
+    score = 0;
+    obstacles = [];
+    portals = [];
+    mode = "cube";
+    player.y = canvas.height - 300;
+    player.yVel = 0;
+
+    // CLEAR OLD TIMERS
+    clearInterval(spikeTimer);
+    clearInterval(portalTimer);
+
+    // START NEW TIMERS BASED ON LEVEL
+    spikeTimer  = setInterval(spawnSpike,  L.spikeRate);
+    portalTimer = setInterval(spawnPortal, L.portalRate);
+
+    // MUSIC
+    music.currentTime = 0;
+    music.loop = true;
+    music.play();
+}
+
+// ---------------------------------------------------------
+// CONTROLS
+// ---------------------------------------------------------
+window.addEventListener("keydown", e=>{
+
+    if(e.code==="Space"){
+        if(state==="menu"){ state="levelSelect"; return; }
+
+        if(state==="game"){
+            if(mode==="cube" || mode==="robot"){
+                if(player.y + player.size >= canvas.height-groundHeight)
+                    player.yVel = -22;
+            }
+            if(mode==="ship")  player.yVel = -10;
+            if(mode==="ball")  player.yVel = -15;
+            if(mode==="ufo")   player.yVel = -15;
+            if(mode==="wave")  player.yVel = -14;
+            if(mode==="spider") player.yVel = -20;
+        }
+    }
+
+    if(state==="levelSelect"){
+        if(e.code==="Digit1"){ level=1; startGame(); }
+        if(e.code==="Digit2"){ level=2; startGame(); }
+        if(e.code==="Digit3"){ level=3; startGame(); }
+    }
+
+    if(e.code==="KeyR" && state==="dead"){
+        state="menu";
+        obstacles=[];
+        portals=[];
+        mode="cube";
+        score=0;
+    }
+});
+</script>
+</body>
+</html>
